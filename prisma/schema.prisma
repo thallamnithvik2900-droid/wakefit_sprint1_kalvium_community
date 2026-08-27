@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -12,7 +12,7 @@ model User {
   name           String
   email          String          @unique
   password       String
-  role           String          @default("USER") // USER or ADMIN
+  role           String          @default("USER")
   mobile         String?
   dob            String?
   gender         String?
@@ -49,7 +49,7 @@ model Order {
   id              String          @id
   userId          String
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status          String          @default("PLACED") // PLACED, PROCESSING, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED
+  status          String          @default("PLACED")
   totalPrice      Float
   createdAt       DateTime        @default(now())
   estDeliveryDate DateTime?
@@ -93,7 +93,7 @@ model ReturnRequest {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   orderId      String
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
+  status       String   @default("PENDING")
   reason       String
   pickupDate   DateTime?
   timeSlot     String
