@@ -3,51 +3,66 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-// Force this API route to run dynamically
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
+    // Check admin session
     const session = await getServerSession(authOptions);
 
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Forbidden. Admin access required." },
-        { status: 403 }
+        {
+          error: "Forbidden. Admin access required.",
+        },
+        {
+          status: 403,
+        }
       );
     }
 
+    // Read query parameters
     const { searchParams } = new URL(req.url);
 
     const status = searchParams.get("status");
     const search = searchParams.get("search");
     const sort = searchParams.get("sort") || "newest";
 
+    // Build Prisma filter
     const where: any = {};
 
-    // Status filter
+    // -----------------------------
+    // STATUS FILTER
+    // -----------------------------
     if (status && status !== "All") {
-      const upperStatus = status.toUpperCase().replace(/\s+/g, "_");
+      const upperStatus = status
+        .toUpperCase()
+        .replace(/\s+/g, "_");
 
-      if (
-        [
-          "PLACED",
-          "ORDER_PLACED",
-          "CONFIRMED",
-          "PROCESSING",
-          "SHIPPED",
-          "OUT_FOR_DELIVERY",
-          "DELIVERED",
-          "CANCELLED",
-        ].includes(upperStatus)
-      ) {
+      const validStatuses = [
+        "PLACED",
+        "ORDER_PLACED",
+        "CONFIRMED",
+        "PROCESSING",
+        "SHIPPED",
+        "OUT_FOR_DELIVERY",
+        "DELIVERED",
+        "CANCELLED",
+      ];
+
+      if (validStatuses.includes(upperStatus)) {
         if (
-          upperStatus === "ORDER_PLACED" ||
-          upperStatus === "PLACED"
+          upperStatus === "PLACED" ||
+          upperStatus === "ORDER_PLACED"
         ) {
           where.OR = [
-            { status: "PLACED" },
-            { status: "ORDER_PLACED" },
+            {
+              status: "PLACED",
+            },
+            {
+              status: "ORDER_PLACED",
+            },
           ];
         } else {
           where.status = upperStatus;
@@ -55,28 +70,29 @@ export async function GET(req: Request) {
       }
     }
 
-    // Search filter
-    if (search) {
+    // -----------------------------
+    // SEARCH FILTER
+    // -----------------------------
+    if (search && search.trim()) {
+      const searchText = search.trim();
+
       const searchOR = [
         {
           id: {
-            contains: search,
-            mode: "insensitive",
+            contains: searchText,
           },
         },
         {
           user: {
             name: {
-              contains: search,
-              mode: "insensitive",
+              contains: searchText,
             },
           },
         },
         {
           user: {
             email: {
-              contains: search,
-              mode: "insensitive",
+              contains: searchText,
             },
           },
         },
@@ -85,8 +101,7 @@ export async function GET(req: Request) {
             some: {
               product: {
                 name: {
-                  contains: search,
-                  mode: "insensitive",
+                  contains: searchText,
                 },
               },
             },
@@ -96,8 +111,12 @@ export async function GET(req: Request) {
 
       if (where.OR) {
         where.AND = [
-          { OR: where.OR },
-          { OR: searchOR },
+          {
+            OR: where.OR,
+          },
+          {
+            OR: searchOR,
+          },
         ];
 
         delete where.OR;
@@ -106,26 +125,43 @@ export async function GET(req: Request) {
       }
     }
 
-    // Sorting
+    // -----------------------------
+    // SORTING
+    // -----------------------------
     let orderBy: any = {
       createdAt: "desc",
     };
 
-    if (sort === "oldest") {
-      orderBy = {
-        createdAt: "asc",
-      };
-    } else if (sort === "highest") {
-      orderBy = {
-        totalPrice: "desc",
-      };
-    } else if (sort === "lowest") {
-      orderBy = {
-        totalPrice: "asc",
-      };
+    switch (sort) {
+      case "oldest":
+        orderBy = {
+          createdAt: "asc",
+        };
+        break;
+
+      case "highest":
+        orderBy = {
+          totalPrice: "desc",
+        };
+        break;
+
+      case "lowest":
+        orderBy = {
+          totalPrice: "asc",
+        };
+        break;
+
+      case "newest":
+      default:
+        orderBy = {
+          createdAt: "desc",
+        };
+        break;
     }
 
-    // Fetch orders
+    // -----------------------------
+    // FETCH ORDERS
+    // -----------------------------
     const orders = await prisma.order.findMany({
       where,
 
@@ -152,7 +188,9 @@ export async function GET(req: Request) {
       orderBy,
     });
 
-    return NextResponse.json(orders);
+    return NextResponse.json(orders, {
+      status: 200,
+    });
   } catch (error) {
     console.error("Fetch admin orders error:", error);
 
